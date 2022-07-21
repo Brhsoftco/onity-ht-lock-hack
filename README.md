@@ -1,27 +1,35 @@
-Introduction
+# Onity HT Lock Protocol and Hacking Approaches
+## A reformat of the [original document](https://github.com/lolptdr/onity-ht-lock-hack)
 
-In this paper we will discuss the design and inner workings of the Onity HT lock system for hotels. Approximately ten million Onity HT locks are installed in hotels worldwide. This accounts for over half of all the installed hotel locks and can be found in approximately a third of all hotels.
+### Introduction
+
+In this paper, we will discuss the design and inner workings of the Onity HT lock system for hotels. Approximately ten million Onity HT locks are installed in hotels worldwide. This accounts for over half of all the installed hotel locks and can be found in approximately a third of all hotels.
 
 We hope to reveal unique insight into the way the Onity HT system works and detail various vulnerabilities therein.
 
-How the Onity lock system is designed
+### How the Onity lock system is designed
 
 There are several parts to the Onity lock system:
 
-Encoder: This is the device which makes the keycards, but it also stores all the property information (e.g. room listings, time tables, etc) and is used to load the portable programmer.
-Portable programmer (or PP): Programs the lock with guest code key values, master codes, time tables, and other information.
-Lock: In our context, we're primarily concerned with the actual circuit board that performs the locking logic for doors. There are multiple lock configurations, e.g. exterior doors and guest room doors, but we'll be talking mostly about guest room locks.
-We are primarily concerned with the PP and the lock, though the encoder plays an important role in the system as it handles cryptography on cards.
+- **Encoder**
+  - This is the device which makes the keycards, but it also stores all the property information (e.g. room listings, time tables, etc) and is used to load the portable programmer.
+- **Portable programmer (or PP)** 
+  - Programs the lock with guest code key values, master codes, time tables, and other information.
+- **Lock**
+  - In our context, we're primarily concerned with the actual circuit board that performs the locking logic for doors. 
+  - There are multiple lock configurations, e.g. exterior doors and guest room doors, but we'll be talking mostly about guest room locks.
+ 
+***We are primarily concerned with the PP and the lock, though the encoder plays an important role in the system as it handles cryptography on cards.***
 
-Important concepts
+### Important concepts
 
-Sitecode
+#### Sitecode
 
 This is a 32-bit code randomly assigned by Onity. It uniquely identifies a hotel property and is the key to the security of the entire system. The sitecode is used for encrypting/decrypting cards, programming the locks, and opening the locks.
 
 For this reason, the sitecode is not ordinarily exposed to anyone, even property owners.
 
-Code key values
+#### Code key values
 
 Code key values consist of 24 bits of data and are used to gain entry to locks. A lock contains a guest code key value and generally one or more master code key values.
 
@@ -31,7 +39,7 @@ Note that the lookahead value effectively reduces the keyspace of the code key v
 
 If two doors happen to be close enough in code key value that their lookahead values overlap, it's possible that a legitimate guest card intended for one door can open another door at the same property. When the doors are assigned initial code key values, these are separated by 1000 to make this less likely. However, all doors are not created equally in a hotel; it's very likely that certain rooms will see higher turnover than others, leading to a situation where the code key values are likely to overlap.
 
-Ident values
+#### Ident values
 
 Each card contains a 16-bit ident value. In a guest card, this specifies two things: which door the card is intended for and which copy the card is. In a master card, rather than specifying the door the card is intended for, it specifies the staff member the card is intended for.
 
@@ -39,11 +47,11 @@ When checking into a hotel you will generally have the option to ask for more th
 
 The important thing to note is that the lock does not know what its own ident value is. The ident value is purely used to identify cards, if they're read using the encoder, and is stored in the audit log for the lock.
 
-Audit log
+#### Audit log
 
 Also known as the openings report, this is a log containing information such as which cards are used to access the lock (by the ident value), use of the open function on the PP, and the introduction of new guest keycards. Each entry is a 16-bit ident (or fake ident value in the case of special events like the open function being used) followed by a 16 bit timestamp.
 
-Special cards
+#### Special cards
 
 While there are a number of special cards, the most important ones for this discussion are the programming card and spare card. When a programming card is introduced into a door followed by a spare card, the spare card becomes the guest card for the door.
 
@@ -51,15 +59,15 @@ Programming cards and spare cards are generally created in case of encoder failu
 
 It should be noted that while programming cards are encrypted with the sitecode of the property, much like any other card, the spare cards are not encrypted whatsoever and simply contain an incrementing value.
 
-Narrative
+### Narrative
 
 To tie things together a bit, it's useful to look at the way the system is used in the general case. What follows is a general narrative on the lock system of a hotel.
 
-Setup
+#### Setup
 
 Upon setup of the encoder by Onity, the doors in the property are loaded into the database along with their assigned ident value and initial code key value. Hotel staff will then load the door data into the portable programmer using the encoder. When the locks are installed in the property, they're initialized using the portable programmer with the proper code key values and masters. This is also performed when the batteries in a lock are replaced, which causes the memory to be lost.
 
-Guest checkin
+#### Guest checkin
 
 When a guest checks into a hotel, the first step in the Onity system is to create one or more keycards. The room name/number is entered into the encoder, followed by the number of nights of the stay (for expiration purposes) and the number of cards to make. Cards are inserted in order and encoded with the proper data for the room.
 
@@ -74,23 +82,26 @@ What is on a hotel keycard
 
 While some pieces of the keycard have been discussed previously, the following is a complete breakdown of its structure:
 
-16-bit ident value
-8-bit flags byte
-16-bit expiration date
-8-bit authorizations byte (not relevant to this discussion)
-24-bit unknown (zeros)
-24-bit code key value
-This is then encrypted with the property's sitecode and stored in track 3 of a standard magstripe card. Code for the crypto algorithm is in appendix B of this paper.
+- 16-bit ident value
+- 8-bit flags byte
+- 16-bit expiration date
+- 8-bit authorizations byte (not relevant to this discussion)
+- 24-bit unknown (zeros)
+- 24-bit code key value
 
-Lock communications
+This data is then encrypted with the property's sitecode and stored in track 3 of a standard magstripe card.
+
+Code for the crypto algorithm is in appendix B of this paper.
+
+#### Lock communications
 
 Communications with the lock take place over a bidirectional single-wire protocol. On the bottom of the lock, on the outside of the door, there is a DC barrel connector, more commonly used for power. This carries data on one wire and ground on the other.
 
 On top of this is the high-level protocol enabling the reading of memory and opening the lock. There are several other functions performed by the portable programmer which are not documented within as they're not relevant to the vulnerabilities outlined in this paper and are not required for an opener device.
 
-Wire protocol
+### Wire protocol
 
-Basic concept
+#### Basic concept
 
 We'll refer to the device communicating with the lock as the "master", which drives all communications.
 
@@ -98,7 +109,7 @@ The line idles high at 3.3v via a pull-up resistor. Both the master and lock com
 
 The important thing to note here is that while either the master or lock can communicate in data pulses, the sync pulses are always generated by the master.
 
-Group structure
+#### Group structure
 
 As noted above, groups consist of repeated sync pulses with data pulses between them (or not). It should be noted that all groups have a trailing sync pulse which no data pulse will follow.
 
@@ -106,7 +117,7 @@ Groups should be separated by no less than 500 microseconds, according to experi
 
 To send data from the master to the lock, there's no need for a preamble; rather you begin sending the groups in order. However, because the lock cannot generate its own sync pulses, it must signify to the master that it wishes to send. It does this by pulling the line low for 120 microseconds when the line is otherwise idle. Once the lock does that, the master should start generating sync pulses and watching for the lock's data pulses.
 
-High level protocol
+#### High level protocol
 
 Below are details on the relevant high-level commands. Note: when referring to 'bytes', we mean 8 bits sent least-significant bit first.
 
@@ -114,7 +125,7 @@ A note on checksums
 
 Each high-level command seems to have its own "checksum" values, really just values XORed with themselves and a constant that's specific to the command. It is unknown where these constants come from or if they are simply random hard-coded values intended to make the protocol more complex.
 
-Read command
+#### Read command
 
 The read command takes a 16-bit memory address and returns 16 bytes of memory from that address. This means that if you read from address 0 and then from address 1, you'll see 15 bytes of overlap; generally you'll want to read in non-overlapping 16-byte rows at a time.
 
@@ -122,13 +133,13 @@ The read command takes the form of a single group: 00000000000000000000000000000
 
 Once this has been sent, the lock will signal for send and communicates a group of 165 bits. There are 13 beginning bits of unknown utility, followed by 16 9-bit bytes (each is followed by a 1 bit), followed by 8 bits which are assumed to be a checksum (as per usual in this protocol).
 
-Open command
+#### Open command
 
 The open command takes a 32-bit sitecode and -- assuming it matches what's stored in the lock -- causes the lock to immediately open.
 
 The open command takes the form of a few groups. They are listed here in order:
 
-00000000000000000000000000000000000000001010001001AAAAAAAA1BBBBBBBB1CCCCCCCC1DDDDDDDD1SSSSSSSS00000000000000000000000000000000000000000000000000
+`00000000000000000000000000000000000000001010001001AAAAAAAA1BBBBBBBB1CCCCCCCC1DDDDDDDD1SSSSSSSS00000000000000000000000000000000000000000000000000
 0000000000000000000000000000000000000000000000000
 0000000000000000000000000000000000000000000000000
 0000000000000000000000000000000000000000000000000
@@ -138,8 +149,9 @@ The open command takes the form of a few groups. They are listed here in order:
 0000000000000000000000000000000000000000000000000
 0000000000000000000000000000000000000000000000000
 0000000000000000000000000000000000000000000000000
-0000000000000000000000000000000000000000100110101111001010
-The A, B, C, and D bytes are the first, second, third, and fourth bytes of the sitecode, respectively. The S byte is a checksum, computed by performing A ^ B ^ C ^ D ^ 0xDD.
+0000000000000000000000000000000000000000100110101111001010`
+
+The `A`, `B`, `C`, and `D` bytes are the first, second, third, and fourth bytes of the sitecode, respectively. The S byte is a checksum, computed by performing `A ^ B ^ C ^ D ^ 0xDD`.
 
 The lock will send no response regardless of success or failure in this case, but rather will simply open if the sitecode is correct.
 
